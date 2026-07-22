@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
-import 'highlight.js/styles/github-dark.css'
+import ShikiHighlighter from 'react-shiki/web'
 import './App.css'
+
+const CODE_THEME = 'github-dark'
 
 const sample = `# Welcome to Mdown
 
@@ -31,11 +32,89 @@ function openFile() {
 \`\`\`
 `
 
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return
+  }
+  // Fallback for non-secure contexts or browsers without the Clipboard API.
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  try {
+    if (!document.execCommand('copy')) throw new Error('execCommand failed')
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
+function useCopy(text) {
+  const [copied, setCopied] = useState(false)
+  const timeoutRef = useRef(null)
+
+  const copy = async () => {
+    try {
+      await copyText(text)
+      setCopied(true)
+      window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      window.alert('Could not copy this code. Please copy it manually.')
+    }
+  }
+
+  return [copied, copy]
+}
+
+function CodeBlock({ code, lang }) {
+  const [copied, copy] = useCopy(code)
+  return (
+    <div className="code-block">
+      <div className="code-block-bar">
+        <span className="code-block-lang">{lang || 'text'}</span>
+        <button
+          className={`copy-button ${copied ? 'is-copied' : ''}`}
+          onClick={copy}
+          aria-label={copied ? 'Copied' : 'Copy code'}
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+      <ShikiHighlighter
+        language={lang || 'text'}
+        theme={CODE_THEME}
+        showLanguage={false}
+        addDefaultStyles={false}
+        className="code-block-pre"
+      >
+        {code}
+      </ShikiHighlighter>
+    </div>
+  )
+}
+
+function InlineCode({ text, children, ...props }) {
+  const [copied, copy] = useCopy(text)
+  return (
+    <button
+      className={`inline-code ${copied ? 'is-copied' : ''}`}
+      title={copied ? '✓ Copied' : 'Click to copy'}
+      aria-label={copied ? 'Copied' : `Copy ${text}`}
+      onClick={copy}
+    >
+      <code {...props}>{children}</code>
+    </button>
+  )
+}
+
 function App() {
   const [markdown, setMarkdown] = useState(sample)
   const [fileName, setFileName] = useState('welcome.md')
   const [isDragging, setIsDragging] = useState(false)
-  const [copied, setCopied] = useState('')
   const inputRef = useRef(null)
 
   const openFile = async (file) => {
@@ -47,16 +126,6 @@ function App() {
     }
     setMarkdown(await file.text())
     setFileName(file.name)
-  }
-
-  const copyInlineCode = async (value) => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(value)
-      window.setTimeout(() => setCopied(''), 1500)
-    } catch {
-      window.alert('Could not copy this code. Please copy it manually.')
-    }
   }
 
   return (
@@ -80,14 +149,18 @@ function App() {
         <article className="markdown-body">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
             components={{
+              pre({ children }) {
+                return <>{children}</>
+              },
               code({ className, children, node, ...props }) {
                 const text = String(children).replace(/\n$/, '')
-                const isBlock = Boolean(className) || node?.position?.start.line !== node?.position?.end.line
-                if (isBlock) return <code className={className} {...props}>{children}</code>
-                const didCopy = copied === text
-                return <button className={`inline-code ${didCopy ? 'is-copied' : ''}`} title={didCopy ? '✓ Copied' : 'Click to copy'} aria-label={didCopy ? 'Copied' : `Copy ${text}`} onClick={() => copyInlineCode(text)}><code {...props}>{children}</code></button>
+                const isBlock = node?.position?.start.line !== node?.position?.end.line
+                if (isBlock) {
+                  const match = /language-(\w+)/.exec(className || '')
+                  return <CodeBlock code={text} lang={match?.[1]} />
+                }
+                return <InlineCode text={text} {...props}>{children}</InlineCode>
               },
               a({ href, children, ...props }) {
                 return <a href={href} target="_blank" rel="noreferrer" {...props}>{children}</a>
