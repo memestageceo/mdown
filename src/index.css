@@ -1,4 +1,31 @@
-:root { font-family: system-ui, sans-serif; background: #faf9f6; color: #20211e; font-synthesis: none; text-rendering: optimizeLegibility; }
-* { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; background: #faf9f6; }
-button, input { font: inherit; }
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #faf9f6;
+  --color-ink: #20211e;
+  --color-ink-2: #1a1b18;
+  --color-accent: #db553f;
+  --color-accent-green: #71a894;
+  --color-link: #b94230;
+  --color-code-text: #ad3f2e;
+  --color-code-chip: #f0ece5;
+  --color-code-chip-hover: #e5d6ce;
+  --color-code-bar: #171815;
+  --color-copy-idle: #b3b5ad;
+  --color-muted: #8a8b85;
+  --color-muted-2: #72746d;
+  --color-muted-3: #686b64;
+  --color-muted-4: #666861;
+  --color-border: #dedbd4;
+  --color-border-2: #f3f1ec;
+
+  --font-brand: Georgia, serif;
+
+  --animate-copied-pop: copied-pop 1.5s ease both;
+  @keyframes copied-pop {
+    0% { transform: scale(.35); opacity: 0; }
+    18% { transform: scale(1.15); opacity: 1; }
+    78% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(.8); opacity: 0; }
+  }
+}
