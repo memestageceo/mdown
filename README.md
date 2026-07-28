@@ -1,16 +1,57 @@
-# React + Vite
+# mdown
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A calm, focused Markdown reader and note editor that turns your notes into Anki
+cloze-deletion flashcards. Everything stays in your browser — nothing is uploaded.
 
-Currently, two official plugins are available:
+## Making flashcards
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Switch to **Edit** and write or paste your notes.
+2. Select a phrase and press **`Alt+C`** (`⌥C` on a Mac). It becomes a cloze
+   deletion: `The {{c1::mitochondria}} is the powerhouse.`
+3. Press **`Alt+Shift+C`** instead to reuse the previous number, which groups both
+   blanks onto a single card.
+4. `Alt+C` on an existing cloze removes it.
 
-## React Compiler
+Numbering is scoped to the block you are in, matching how Anki works: each
+paragraph or list item becomes one note, and numbering restarts at `c1` for each.
+Cloze syntax inside fenced code blocks is left alone.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Hints are supported — type `{{c1::answer::hint}}` and the hint shows on hover in
+the preview.
 
-## Expanding the Oxlint configuration
+## Getting them into Anki
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Choose **Export → Anki deck (.tsv)**, then in Anki pick **File → Import**. The
+note type, deck and tags are all set by the file, so no configuration is needed.
+Requires Anki 2.1.54 or newer.
+
+Each exported row is one note, with three columns:
+
+| Column | Anki field | Content |
+| --- | --- | --- |
+| 1 | Text | The block, rendered to HTML so bold and code survive |
+| 2 | Back Extra | The heading trail above the block, e.g. `Biology › Cells` |
+| 3 | Tags | The same headings, slugified |
+
+Only blocks that actually contain a cloze are exported. **Export → Markdown
+(.md)** downloads your notes with the cloze syntax inline, so they round-trip.
+
+## Reading
+
+Drop a `.md` file anywhere on the page, paste Markdown with `Ctrl+V` / `Cmd+V`, or
+use **Open**. GitHub-flavoured Markdown, syntax-highlighted code blocks, and
+click-to-copy inline code all work. Your document is saved to `localStorage`, so a
+refresh will not lose it.
+
+## Development
+
+```sh
+npm install
+npm run dev      # start the dev server
+npm test         # run the unit tests
+npm run lint     # oxlint
+npm run build    # production build
+```
+
+The cloze engine, block segmentation and TSV generation live in `src/lib/` as pure
+functions and are covered by unit tests.

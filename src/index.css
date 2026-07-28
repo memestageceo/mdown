@@ -18,6 +18,10 @@
   --color-muted-4: #666861;
   --color-border: #dedbd4;
   --color-border-2: #f3f1ec;
+  --color-cloze-bg: #f7e6e0;
+  --color-cloze-text: #9d3928;
+  --color-cloze-rule: #ecc9bd;
+  --color-cloze-badge: #c07260;
 
   --font-brand: Georgia, serif;
 
