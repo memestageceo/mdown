@@ -1,11 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkFrontmatter from 'remark-frontmatter'
 import ShikiHighlighter from 'react-shiki/web'
+import { remarkFrontmatterCard } from './frontmatter'
 
 const CODE_THEME = 'github-dark'
 
-const sample = `# Welcome to Mdown
+const sample = `---
+title: Welcome to Mdown
+author: Mdown
+tags: [markdown, viewer]
+---
+
+# Welcome to Mdown
 
 Open a **Markdown** file from your computer, or paste Markdown text straight in, to read it in a calm, focused view.
 
@@ -14,6 +22,11 @@ Open a **Markdown** file from your computer, or paste Markdown text straight in,
 - Tables, task lists, and strikethrough
 - Syntax highlighted code blocks
 - Clickable inline code, like \`npm run dev\`
+- YAML frontmatter, shown above as a metadata card
+
+- [x] Parse YAML frontmatter
+- [x] Render GitHub-flavoured Markdown
+- [ ] Click a checkbox below to try it
 
 | Feature | Ready |
 | --- | --- |
@@ -96,6 +109,62 @@ function CodeBlock({ code, lang }) {
   )
 }
 
+function FrontmatterCard({ entries }) {
+  let parsed = []
+  try {
+    parsed = JSON.parse(entries || '[]')
+  } catch {
+    parsed = []
+  }
+  if (!parsed.length) return null
+  return (
+    <dl className="mb-9 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-[9px] border border-border bg-border-2/40 px-5 py-4 font-sans text-[13px]">
+      {parsed.map(({ key, value }) => (
+        <div className="contents" key={key}>
+          <dt className="self-start pt-px text-[11px] font-semibold tracking-[.05em] text-muted-2 uppercase">{key}</dt>
+          <dd className="break-words text-ink-2">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+// Task-list checkboxes are re-derived from the markdown source on every
+// render, so toggling one has to edit the source text itself rather than
+// component state. The `li` for a task item knows its offset into that
+// source (from remark's position info); it's threaded down to the nested
+// `input` through context since react-markdown gives synthesized checkbox
+// nodes no position of their own.
+const TaskCheckboxOffsetContext = createContext(null)
+const TaskCheckboxToggleContext = createContext(() => {})
+
+function TaskCheckboxInput({ node: _node, ...props }) {
+  const offset = useContext(TaskCheckboxOffsetContext)
+  const toggle = useContext(TaskCheckboxToggleContext)
+  if (props.type === 'checkbox' && offset != null) {
+    return (
+      <input
+        type="checkbox"
+        checked={!!props.checked}
+        onChange={() => toggle(offset)}
+        className="mr-1.5 cursor-pointer accent-accent align-middle"
+      />
+    )
+  }
+  return <input className="accent-accent" {...props} />
+}
+
+function toggleCheckboxAtOffset(source, offset) {
+  if (offset == null || offset < 0 || offset > source.length) return source
+  const lineEnd = source.indexOf('\n', offset)
+  const line = source.slice(offset, lineEnd === -1 ? source.length : lineEnd)
+  const match = line.match(/\[([ xX])\]/)
+  if (!match) return source
+  const markerIndex = offset + match.index + 1
+  const nextChar = match[1] === ' ' ? 'x' : ' '
+  return source.slice(0, markerIndex) + nextChar + source.slice(markerIndex + 1)
+}
+
 function InlineCode({ text, children, ...props }) {
   const [copied, copy] = useCopy(text)
   return (
@@ -135,6 +204,8 @@ function App() {
     }
     showMarkdown(await file.text(), file.name)
   }
+
+  const toggleCheckbox = (offset) => setMarkdown((prev) => toggleCheckboxAtOffset(prev, offset))
 
   const pasteMarkdown = (text) => {
     if (!text?.trim()) return
@@ -218,43 +289,57 @@ function App() {
           Drop your Markdown file here
         </div>
         <article className="mx-auto max-w-[720px] font-sans text-lg leading-[1.72] max-sm:text-[17px]">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              h1: (props) => <h1 className="mb-6.5 text-[clamp(36px,5vw,54px)] leading-[1.18] tracking-[-0.035em] text-ink-2" {...props} />,
-              h2: (props) => <h2 className="mt-13 mb-3.25 text-[29px] leading-[1.18] text-ink-2" {...props} />,
-              h3: (props) => <h3 className="mt-8.75 mb-2 text-[22px] leading-[1.18] text-ink-2" {...props} />,
-              p: (props) => <p className="mb-5.5" {...props} />,
-              ul: (props) => <ul className="mb-5.5 list-disc pl-5 marker:text-accent" {...props} />,
-              ol: (props) => <ol className="mb-5.5 list-decimal pl-5 marker:text-accent" {...props} />,
-              li: (props) => <li className="pl-[3px]" {...props} />,
-              blockquote: (props) => <blockquote className="my-7.5 border-l-[3px] border-accent py-1.25 pl-5.5 text-muted-3" {...props} />,
-              table: (props) => <table className="my-7 w-full border-collapse font-sans text-sm" {...props} />,
-              th: (props) => <th className="border-b border-border bg-border-2 px-3 py-2.5 text-left" {...props} />,
-              td: (props) => <td className="border-b border-border px-3 py-2.5 text-left" {...props} />,
-              img: (props) => <img className="max-w-full rounded-[7px]" {...props} />,
-              input: (props) => <input className="accent-accent" {...props} />,
-              pre({ children }) {
-                return <>{children}</>
-              },
-              code({ className, children, node, ...props }) {
-                const text = String(children).replace(/\n$/, '')
-                const isBlock = node?.position?.start.line !== node?.position?.end.line
-                if (isBlock) {
-                  const match = /language-(\w+)/.exec(className || '')
-                  return <CodeBlock code={text} lang={match?.[1]} />
-                }
-                return <InlineCode text={text} {...props}>{children}</InlineCode>
-              },
-              a({ href, children, ...props }) {
-                return (
-                  <a href={href} target="_blank" rel="noreferrer" className="text-link underline decoration-1 underline-offset-[3px]" {...props}>
-                    {children}
-                  </a>
-                )
-              },
-            }}
-          >{markdown}</ReactMarkdown>
+          <TaskCheckboxToggleContext.Provider value={toggleCheckbox}>
+            <ReactMarkdown
+              remarkPlugins={[remarkFrontmatter, remarkGfm, remarkFrontmatterCard]}
+              components={{
+                h1: (props) => <h1 className="mb-6.5 text-[clamp(36px,5vw,54px)] leading-[1.18] tracking-[-0.035em] text-ink-2" {...props} />,
+                h2: (props) => <h2 className="mt-13 mb-3.25 text-[29px] leading-[1.18] text-ink-2" {...props} />,
+                h3: (props) => <h3 className="mt-8.75 mb-2 text-[22px] leading-[1.18] text-ink-2" {...props} />,
+                p: (props) => <p className="mb-5.5" {...props} />,
+                ul: (props) => <ul className="mb-5.5 list-disc pl-5 marker:text-accent" {...props} />,
+                ol: (props) => <ol className="mb-5.5 list-decimal pl-5 marker:text-accent" {...props} />,
+                li: ({ node, children, ...props }) => {
+                  const isTask = Array.isArray(node?.properties?.className) && node.properties.className.includes('task-list-item')
+                  const offset = node?.position?.start?.offset
+                  if (!isTask || offset == null) {
+                    return <li className="pl-[3px]" {...props}>{children}</li>
+                  }
+                  return (
+                    <TaskCheckboxOffsetContext.Provider value={offset}>
+                      <li className="list-none pl-[3px]" {...props}>{children}</li>
+                    </TaskCheckboxOffsetContext.Provider>
+                  )
+                },
+                blockquote: (props) => <blockquote className="my-7.5 border-l-[3px] border-accent py-1.25 pl-5.5 text-muted-3" {...props} />,
+                table: (props) => <table className="my-7 w-full border-collapse font-sans text-sm" {...props} />,
+                th: (props) => <th className="border-b border-border bg-border-2 px-3 py-2.5 text-left" {...props} />,
+                td: (props) => <td className="border-b border-border px-3 py-2.5 text-left" {...props} />,
+                img: (props) => <img className="max-w-full rounded-[7px]" {...props} />,
+                frontmattercard: FrontmatterCard,
+                input: TaskCheckboxInput,
+                pre({ children }) {
+                  return <>{children}</>
+                },
+                code({ className, children, node, ...props }) {
+                  const text = String(children).replace(/\n$/, '')
+                  const isBlock = node?.position?.start.line !== node?.position?.end.line
+                  if (isBlock) {
+                    const match = /language-(\w+)/.exec(className || '')
+                    return <CodeBlock code={text} lang={match?.[1]} />
+                  }
+                  return <InlineCode text={text} {...props}>{children}</InlineCode>
+                },
+                a({ href, children, ...props }) {
+                  return (
+                    <a href={href} target="_blank" rel="noreferrer" className="text-link underline decoration-1 underline-offset-[3px]" {...props}>
+                      {children}
+                    </a>
+                  )
+                },
+              }}
+            >{markdown}</ReactMarkdown>
+          </TaskCheckboxToggleContext.Provider>
         </article>
       </section>
       <footer className="pt-5 px-[18px] pb-[38px] text-center font-sans text-[13px] leading-normal text-muted">
