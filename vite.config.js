@@ -21,7 +21,9 @@ export default defineConfig({
         scope: '.',
         display: 'standalone',
         background_color: '#faf9f6',
-        theme_color: '#20211e',
+        // Matches the light header; index.html swaps the tag at runtime when
+        // the dark theme is active.
+        theme_color: '#faf9f6',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

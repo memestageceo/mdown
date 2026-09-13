@@ -4,7 +4,11 @@ import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
 import ShikiHighlighter from 'react-shiki/web'
 import { remarkFrontmatterCard } from './frontmatter'
+import { useTheme } from './theme'
 
+// Code cards keep their own dark surface in both themes, so one code theme
+// serves both; the card's background comes from `--color-code-bg` instead of
+// Shiki's, which keeps it in step with the rest of the palette.
 const CODE_THEME = 'github-dark'
 
 const sample = `---
@@ -23,6 +27,7 @@ Open a **Markdown** file from your computer, or paste Markdown text straight in,
 - Syntax highlighted code blocks
 - Clickable inline code, like \`npm run dev\`
 - YAML frontmatter, shown above as a metadata card
+- A light and a dark theme — the toggle is up in the header
 
 - [x] Parse YAML frontmatter
 - [x] Render GitHub-flavoured Markdown
@@ -82,14 +87,53 @@ function useCopy(text) {
   return [copied, copy]
 }
 
+function ThemeToggle() {
+  const { theme, resolved, toggle } = useTheme()
+  const next = resolved === 'dark' ? 'light' : 'dark'
+  const label = `Switch to ${next} theme`
+
+  return (
+    <button
+      className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-[9px] border border-border bg-transparent text-muted transition hover:border-accent hover:text-accent max-sm:size-[38px]"
+      onClick={toggle}
+      aria-label={label}
+      title={theme === 'system' ? `${label} (following your system)` : label}
+    >
+      {resolved === 'dark' ? (
+        // Sun
+        <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.1" />
+          <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6" />
+        </svg>
+      ) : (
+        // Moon
+        <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20.4 13.9A8.4 8.4 0 1 1 10.1 3.6a6.6 6.6 0 0 0 10.3 10.3Z" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+// react-markdown hands each component the hast `node` plus whatever classes
+// the markdown itself produced (`contains-task-list`, `language-js`, …).
+// Spreading those straight onto an element leaks `node` into the DOM and lets
+// the markdown class replace the styling wholesale, so elements are built
+// through this helper instead: own classes first, markdown classes appended.
+function mdElement(Tag, classes) {
+  return function MdElement({ node: _node, className, ...props }) {
+    return <Tag className={className ? `${classes} ${className}` : classes} {...props} />
+  }
+}
+
 function CodeBlock({ code, lang }) {
   const [copied, copy] = useCopy(code)
   return (
-    <div className="my-[27px] w-full max-w-full min-w-0 overflow-hidden rounded-[9px] bg-ink">
+    <div className="my-[27px] w-full max-w-full min-w-0 overflow-hidden rounded-[10px] border border-black/5 bg-code-bg shadow-sm dark:border-white/8 dark:shadow-none">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/8 bg-code-bar px-3.5 py-2 sm:flex-nowrap">
-        <span className="truncate font-mono text-[11px] font-semibold tracking-[.06em] text-muted uppercase">{lang || 'text'}</span>
+        <span className="truncate font-mono text-[11px] font-semibold tracking-[.06em] text-code-label uppercase">{lang || 'text'}</span>
         <button
-          className={`shrink-0 cursor-pointer rounded-[5px] px-2.25 py-1 font-sans text-[12px] font-semibold transition-colors ${copied ? 'text-accent-green' : 'text-copy-idle hover:bg-white/8 hover:text-white'}`}
+          className={`shrink-0 cursor-pointer rounded-[6px] px-2.25 py-1 font-sans text-[12px] font-semibold transition-colors ${copied ? 'text-code-green' : 'text-copy-idle hover:bg-white/10 hover:text-white'}`}
           onClick={copy}
           aria-label={copied ? 'Copied' : 'Copy code'}
         >
@@ -101,7 +145,7 @@ function CodeBlock({ code, lang }) {
         theme={CODE_THEME}
         showLanguage={false}
         addDefaultStyles={false}
-        className="m-0 w-full max-w-full min-w-0 overflow-x-auto p-4 text-[13px] leading-[1.55] sm:p-5 sm:text-sm [&_code]:bg-transparent"
+        className="m-0 w-full max-w-full min-w-0 overflow-x-auto p-4 text-[13px] leading-[1.55] sm:p-5 sm:text-sm [&_code]:bg-transparent [&_pre]:!bg-transparent"
       >
         {code}
       </ShikiHighlighter>
@@ -118,10 +162,10 @@ function FrontmatterCard({ entries }) {
   }
   if (!parsed.length) return null
   return (
-    <dl className="mb-9 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-[9px] border border-border bg-border-2/40 px-5 py-4 font-sans text-[13px]">
+    <dl className="mb-9 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-[10px] border border-border bg-surface px-5 py-4 font-sans text-[13px]">
       {parsed.map(({ key, value }) => (
         <div className="contents" key={key}>
-          <dt className="self-start pt-px text-[11px] font-semibold tracking-[.05em] text-muted-2 uppercase">{key}</dt>
+          <dt className="self-start pt-px text-[11px] font-semibold tracking-[.05em] text-muted uppercase">{key}</dt>
           <dd className="break-words text-ink-2">{value}</dd>
         </div>
       ))}
@@ -147,7 +191,7 @@ function TaskCheckboxInput({ node: _node, ...props }) {
         type="checkbox"
         checked={!!props.checked}
         onChange={() => toggle(offset)}
-        className="mr-1.5 cursor-pointer accent-accent align-middle"
+        className="mr-1.5 size-[15px] cursor-pointer accent-accent align-middle"
       />
     )
   }
@@ -169,7 +213,7 @@ function InlineCode({ text, children, ...props }) {
   const [copied, copy] = useCopy(text)
   return (
     <button
-      className="relative cursor-pointer rounded border-0 bg-code-chip px-1.25 py-px font-mono text-[0.86em] text-code-text hover:bg-code-chip-hover"
+      className="relative cursor-pointer rounded-[5px] border-0 bg-code-chip px-1.25 py-px font-mono text-[0.86em] text-code-text transition-colors hover:bg-code-chip-hover"
       title={copied ? '✓ Copied' : 'Click to copy'}
       aria-label={copied ? 'Copied' : `Copy ${text}`}
       onClick={copy}
@@ -239,29 +283,30 @@ function App() {
 
   return (
     <main className="min-h-screen text-ink">
-      <header className="grid h-17 grid-cols-[1fr_auto_1fr] items-center gap-x-3 border-b border-border bg-paper/92 px-[5vw] backdrop-blur-[8px] sticky top-0 z-[2] max-sm:grid-cols-[1fr_auto] max-sm:px-[18px]">
+      <header className="grid h-17 grid-cols-[1fr_auto_1fr] items-center gap-x-3 border-b border-border bg-paper/85 px-[5vw] backdrop-blur-[10px] sticky top-0 z-[2] max-sm:grid-cols-[1fr_auto] max-sm:gap-x-2 max-sm:px-[14px]">
         <button
-          className="justify-self-start flex cursor-pointer items-center gap-[9px] border-0 bg-transparent py-1 font-brand text-xl font-bold leading-none text-ink"
+          className="justify-self-start flex cursor-pointer items-center gap-[9px] border-0 bg-transparent py-1 font-brand text-xl font-bold leading-none text-ink-2"
           onClick={() => { setMarkdown(sample); setFileName('welcome.md') }}
           aria-label="Show welcome document"
         >
-          <span className="grid size-[25px] place-items-center rounded-[7px] bg-accent font-sans text-[15px] font-bold leading-none text-white">M</span>
+          <span className="grid size-[25px] place-items-center rounded-[7px] bg-accent font-sans text-[15px] font-bold leading-none text-on-accent">M</span>
           <span>mdown</span>
         </button>
-        <div className="max-w-[32vw] truncate text-[13px] text-muted-2 max-sm:hidden">
-          <span className="mr-[7px] inline-block size-[7px] rounded-full bg-accent-green" />
-          {fileName}
+        <div className="flex max-w-[32vw] items-center gap-[7px] rounded-full border border-border bg-surface px-3 py-1 text-[13px] text-muted max-sm:hidden">
+          <span className="size-[7px] shrink-0 rounded-full bg-accent-green" />
+          <span className="truncate">{fileName}</span>
         </div>
-        <div className="justify-self-end flex items-center gap-2 whitespace-nowrap">
+        <div className="justify-self-end flex items-center gap-2 whitespace-nowrap max-sm:gap-1.5">
+          <ThemeToggle />
           <button
-            className="cursor-pointer whitespace-nowrap rounded-[7px] border border-border bg-transparent px-3.5 py-2.5 font-sans text-[13px] font-semibold text-ink transition hover:border-accent hover:text-accent max-sm:px-[11px] max-sm:py-[9px]"
+            className="h-10 cursor-pointer whitespace-nowrap rounded-[9px] border border-border bg-transparent px-3.5 font-sans text-[13px] font-semibold text-ink transition hover:border-accent hover:text-accent max-sm:h-[38px] max-sm:px-2.5"
             onClick={pasteFromClipboard}
             title="Paste from clipboard (or press Ctrl+V / Cmd+V anywhere)"
           >
             Paste<span className="max-sm:hidden"> Markdown</span>
           </button>
           <button
-            className="cursor-pointer whitespace-nowrap rounded-[7px] bg-ink px-3.5 py-2.5 font-sans text-[13px] font-semibold text-white transition hover:-translate-y-px hover:bg-accent max-sm:px-[11px] max-sm:py-[9px]"
+            className="h-10 cursor-pointer whitespace-nowrap rounded-[9px] bg-ink px-3.5 font-sans text-[13px] font-semibold text-paper transition hover:-translate-y-px hover:bg-accent hover:text-on-accent max-sm:h-[38px] max-sm:px-2.5"
             onClick={() => inputRef.current?.click()}
           >
             Open<span className="max-sm:hidden"> Markdown</span> <span className="ml-[5px]">↗</span>
@@ -277,13 +322,13 @@ function App() {
       </header>
 
       <section
-        className={`relative mx-auto mt-[58px] mb-[35px] max-w-[940px] px-7 max-sm:mt-[38px] max-sm:px-5 ${isDragging ? 'outline-2 outline-dashed outline-accent outline-offset-8' : ''}`}
+        className="relative mx-auto mt-[58px] mb-[35px] max-w-[940px] px-7 max-sm:mt-[38px] max-sm:px-5"
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={(e) => { e.preventDefault(); setIsDragging(false); openFile(e.dataTransfer.files?.[0]) }}
       >
         <div
-          className={`absolute inset-0 z-[1] place-items-center bg-white/85 font-bold text-accent ${isDragging ? 'grid' : 'hidden'}`}
+          className={`absolute inset-0 z-[1] place-items-center rounded-[14px] border-2 border-dashed border-accent bg-paper/90 font-semibold text-accent backdrop-blur-[2px] ${isDragging ? 'grid' : 'hidden'}`}
           aria-hidden={!isDragging}
         >
           Drop your Markdown file here
@@ -293,13 +338,18 @@ function App() {
             <ReactMarkdown
               remarkPlugins={[remarkFrontmatter, remarkGfm, remarkFrontmatterCard]}
               components={{
-                h1: (props) => <h1 className="mb-6.5 text-[clamp(36px,5vw,54px)] leading-[1.18] tracking-[-0.035em] text-ink-2" {...props} />,
-                h2: (props) => <h2 className="mt-13 mb-3.25 text-[29px] leading-[1.18] text-ink-2" {...props} />,
-                h3: (props) => <h3 className="mt-8.75 mb-2 text-[22px] leading-[1.18] text-ink-2" {...props} />,
-                p: (props) => <p className="mb-5.5" {...props} />,
-                ul: (props) => <ul className="mb-5.5 list-disc pl-5 marker:text-accent" {...props} />,
-                ol: (props) => <ol className="mb-5.5 list-decimal pl-5 marker:text-accent" {...props} />,
-                li: ({ node, children, ...props }) => {
+                h1: mdElement('h1', 'mb-6.5 text-[clamp(36px,5vw,54px)] leading-[1.18] font-bold tracking-[-0.035em] text-ink-2'),
+                h2: mdElement('h2', 'mt-13 mb-3.25 text-[29px] leading-[1.2] font-bold tracking-[-0.02em] text-ink-2'),
+                h3: mdElement('h3', 'mt-8.75 mb-2 text-[22px] leading-[1.25] font-bold tracking-[-0.01em] text-ink-2'),
+                h4: mdElement('h4', 'mt-7 mb-1.5 text-[18px] leading-[1.35] font-bold text-ink-2'),
+                h5: mdElement('h5', 'mt-6 mb-1.5 text-[16px] leading-[1.4] font-bold text-ink-2'),
+                h6: mdElement('h6', 'mt-6 mb-1.5 text-[13px] font-bold tracking-[.06em] text-muted uppercase'),
+                p: mdElement('p', 'mb-5.5'),
+                // `[&_li>p]` keeps loose lists (the ones remark wraps in
+                // paragraphs) from inheriting the full paragraph gap.
+                ul: mdElement('ul', 'mb-5.5 list-disc space-y-2 pl-5 marker:text-accent [&_li>p]:mb-0 [&_li>p+p]:mt-3 [&_ul]:mt-2 [&_ul]:mb-0'),
+                ol: mdElement('ol', 'mb-5.5 list-decimal space-y-2 pl-5 marker:font-semibold marker:text-accent [&_li>p]:mb-0 [&_li>p+p]:mt-3 [&_ol]:mt-2 [&_ol]:mb-0'),
+                li: ({ node, children, className: _className, ...props }) => {
                   const isTask = Array.isArray(node?.properties?.className) && node.properties.className.includes('task-list-item')
                   const offset = node?.position?.start?.offset
                   if (!isTask || offset == null) {
@@ -307,15 +357,21 @@ function App() {
                   }
                   return (
                     <TaskCheckboxOffsetContext.Provider value={offset}>
-                      <li className="list-none pl-[3px]" {...props}>{children}</li>
+                      {/* Pulled left so the checkbox lines up with the bullets of a plain list. */}
+                      <li className="-ml-2.5 list-none pl-[3px]" {...props}>{children}</li>
                     </TaskCheckboxOffsetContext.Provider>
                   )
                 },
-                blockquote: (props) => <blockquote className="my-7.5 border-l-[3px] border-accent py-1.25 pl-5.5 text-muted-3" {...props} />,
-                table: (props) => <table className="my-7 w-full border-collapse font-sans text-sm" {...props} />,
-                th: (props) => <th className="border-b border-border bg-border-2 px-3 py-2.5 text-left" {...props} />,
-                td: (props) => <td className="border-b border-border px-3 py-2.5 text-left" {...props} />,
-                img: (props) => <img className="max-w-full rounded-[7px]" {...props} />,
+                blockquote: mdElement('blockquote', 'my-7.5 rounded-r-[8px] border-l-[3px] border-accent bg-surface/70 py-3.5 pr-5 pl-5.5 text-muted [&>*:last-child]:mb-0'),
+                hr: mdElement('hr', 'my-11 h-px border-0 bg-border'),
+                table: ({ node: _node, className, ...props }) => (
+                  <div className="my-7 w-full overflow-x-auto rounded-[10px] border border-border">
+                    <table className={`w-full border-collapse font-sans text-sm [&_tr:last-child_td]:border-b-0 ${className || ''}`} {...props} />
+                  </div>
+                ),
+                th: mdElement('th', 'border-b border-border bg-surface px-3.5 py-2.5 text-left font-semibold text-ink-2'),
+                td: mdElement('td', 'border-b border-border px-3.5 py-2.5 text-left'),
+                img: mdElement('img', 'max-w-full rounded-[8px] border border-border'),
                 frontmattercard: FrontmatterCard,
                 input: TaskCheckboxInput,
                 pre({ children }) {
@@ -330,9 +386,9 @@ function App() {
                   }
                   return <InlineCode text={text} {...props}>{children}</InlineCode>
                 },
-                a({ href, children, ...props }) {
+                a({ href, children, node: _node, className: _className, ...props }) {
                   return (
-                    <a href={href} target="_blank" rel="noreferrer" className="text-link underline decoration-1 underline-offset-[3px]" {...props}>
+                    <a href={href} target="_blank" rel="noreferrer" className="text-link underline decoration-1 underline-offset-[3px] transition-colors hover:decoration-2" {...props}>
                       {children}
                     </a>
                   )
@@ -342,8 +398,8 @@ function App() {
           </TaskCheckboxToggleContext.Provider>
         </article>
       </section>
-      <footer className="pt-5 px-[18px] pb-[38px] text-center font-sans text-[13px] leading-normal text-muted">
-        Drop a <strong className="text-muted-4">.md</strong> file anywhere, paste Markdown text with <strong className="text-muted-4">Ctrl+V</strong>, or use Open Markdown. Inline code copies with a click.
+      <footer className="border-t border-border pt-5 px-[18px] pb-[38px] text-center font-sans text-[13px] leading-normal text-muted">
+        Drop a <strong className="font-semibold text-ink">.md</strong> file anywhere, paste Markdown text with <strong className="font-semibold text-ink">Ctrl+V</strong>, or use Open Markdown. Inline code copies with a click.
       </footer>
     </main>
   )
