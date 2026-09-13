@@ -5,9 +5,24 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="./pwa-192x192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#20211e" />
+    <meta name="theme-color" content="#faf9f6" />
     <meta name="description" content="A calm, focused Markdown file viewer. Nothing is uploaded — your files stay in your browser." />
     <title>Mdown — Markdown reader</title>
+    <script>
+      // Resolve the theme before first paint so a dark-mode reader never gets
+      // a flash of the paper theme. Kept in sync with src/theme.js.
+      (function () {
+        try {
+          var stored = localStorage.getItem('mdown-theme')
+        } catch (e) {}
+        var theme = stored === 'light' || stored === 'dark'
+          ? stored
+          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        document.documentElement.dataset.theme = theme
+        document.querySelector('meta[name="theme-color"]')
+          .setAttribute('content', theme === 'dark' ? '#22231f' : '#faf9f6')
+      })()
+    </script>
   </head>
   <body class="min-w-[320px] bg-paper text-ink font-sans antialiased">
     <div id="root"></div>
